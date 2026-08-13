@@ -14,19 +14,22 @@
 #  limitations under the License.
 #
 
+# Connections wiring: SeaweedFS is the S3 store producer. It consumes no
+# connection and produces one s3 Connection (output "s3"). The grants and
+# buckets contract is the upstream one, moved from .Context.defaultStorage to
+# package parameters, and the endpoints are computed here instead of being read
+# back from the context: the package is the thing that owns them.
+
 apiVersion: v1alpha1
 name: seaweedfs
-tag: 4.17.0-p4
+tag: 4.17.0-p4-cnx01
 protected: false
 description: |
   SeaweedFS is a simple and highly scalable distributed file system. There are the objectives to store billions of files and to serve the files fast!
 usage:
   text: |
     SeaweedFS is a simple and highly scalable distributed file system.
-    Access the console at {{ .Context.defaultStorage.provider.endpoints.consoleUrl 
-       | replace "{{ .Release.namespace }}" .Release.spec.targetNamespace 
-       | replace "{{ .Release.metadata.name }}" .Release.metadata.name 
-       | replace "{{ .Context.ingress.suffix }}" .Context.platform.ingress.suffix }}
+    Access the console at https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}
 schema:
   parameters:
     properties:
@@ -41,6 +44,39 @@ schema:
       volumeStorage: { type: string, required: true, default: "2" }
       filerStorage: { type: string, required: true, default: "0.5" }
       filerLogStorage: { type: string, required: true, default: "0.5" }
+      # S3 identities of the store, one entry per principal. actions are the
+      # SeaweedFS verbs, scoped to buckets when buckets is set. sts marks a
+      # principal allowed to assume the STS role, which SeaweedFS only grants
+      # to an Admin identity.
+      grants:
+        type: array
+        items:
+          properties:
+            principal: { type: string, required: true }
+            credentialsSecret:
+              required: true
+              properties:
+                name: { type: string, required: true }
+                accessKeyKey: { type: string, required: true }
+                secretKeyKey: { type: string, required: true }
+            actions:
+              type: array
+              items: { type: string }
+            buckets:
+              type: array
+              items: { type: string }
+            sts: { type: boolean, default: false }
+      # Buckets created at startup. paths seeds prefixes inside the bucket for
+      # consumers that require them to exist beforehand.
+      buckets:
+        type: array
+        items:
+          properties:
+            name: { type: string, required: true }
+            anonymousRead: { type: boolean, default: false }
+            paths:
+              type: array
+              items: { type: string }
   context:
     properties:
       platform:
@@ -68,20 +104,17 @@ modules:
         repository: quay.io/okdp/charts/seaweedfs-auth-config
         tag: 1.1.0
     values: |
-      {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
-      
-      {{- $storage := .Context.defaultStorage -}}
+
       {{- $s3ConfigSecret := printf "%s-s3-config" $release -}}
       {{- $stsEnabled := false -}}
-      {{- range $g := ($storage.grants | default list) }}
+      {{- range $g := (.Parameters.grants | default list) }}
         {{- if $g.sts }}{{- $stsEnabled = true }}{{- end }}
       {{- end }}
 
       # Pin the chart fullname so the generated IAM ConfigMap has a deterministic
       # name, independent of Helm's fullname dedup (wich depends on the release name)
-      fullnameOverride: {{ $release }}-auth-config 
+      fullnameOverride: {{ $release }}-auth-config
 
       iamConfig:
         sts:
@@ -89,7 +122,7 @@ modules:
           maxSessionLength: "12h"
           issuer: "seaweedfs-sts"
           signingKey: ""
-      
+
         # -- IAM policies to define in the SeaweedFS IAM config.
         policies:
           - name: "S3WritePolicy"
@@ -99,7 +132,7 @@ modules:
                 - Effect: "Allow"
                   Action: ["s3:List*","s3:Get*","s3:Put*","s3:DeleteObject"]
                   Resource: ["*"]
-        
+
         # -- IAM roles to define in the SeaweedFS IAM config.
         roles:
           - roleName: "S3WriteRole"
@@ -113,7 +146,7 @@ modules:
                   Principal: "*"
                   Action:
                     - "sts:AssumeRole"
-      
+
       s3Config:
         enabled: true
         secretName: {{ $s3ConfigSecret }}
@@ -124,7 +157,7 @@ modules:
               accessKey: {{ .Parameters.rootAccessKey | quote }}
               secretKey: {{ .Parameters.rootSecretKey | quote }}
             actions: ["Admin"]
-          {{- range $g := ($storage.grants | default list) }}
+          {{- range $g := (.Parameters.grants | default list) }}
           {{- $buckets := ($g.buckets | default list) }}
           {{- $actions := list }}
           {{- range $a := ($g.actions | default list) }}
@@ -170,32 +203,21 @@ modules:
       {{- $release := printf "%v" .Release.metadata.name -}}
       {{- $domain := printf "%v" .Context.platform.ingress.suffix -}}
 
-      {{- $storage := .Context.defaultStorage -}}
       {{- $s3ConfigSecret := printf "%s-s3-config" $release -}}
       {{- $stsEnabled := false -}}
-      {{- range $g := ($storage.grants | default list) }}
+      {{- range $g := (.Parameters.grants | default list) }}
         {{- if $g.sts }}{{- $stsEnabled = true }}{{- end }}
       {{- end }}
 
-      {{- $seaweedfsS3Url := .Context.defaultStorage.provider.endpoints.apiUrl
-         | replace "{{ .Release.namespace }}" $namespace
-         | replace "{{ .Release.metadata.name }}" $release
-         | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $seaweedfsFilerUrl := .Context.defaultStorage.provider.endpoints.consoleUrl 
-         | replace "{{ .Release.namespace }}" $namespace
-         | replace "{{ .Release.metadata.name }}" $release
-         | replace "{{ .Context.ingress.suffix }}" $domain -}}
-      
-      {{- $seaweedfsS3Host := regexReplaceAll "^https?://" $seaweedfsS3Url "" -}}
-      {{- $seaweedfsFilerHost := regexReplaceAll "^https?://" $seaweedfsFilerUrl "" -}}
-      
+      {{- $seaweedfsS3Host := printf "%s-%s-api.%s" $release $namespace $domain -}}
+      {{- $seaweedfsFilerHost := printf "%s-%s.%s" $release $namespace $domain -}}
+
       nameOverride: "{{ .Release.metadata.name }}"
       fullnameOverride: "{{ .Release.metadata.name }}"
 
       global:
         imageName: chrislusf/seaweedfs
-      
+
       image:
         tag: "4.17"
 
@@ -211,7 +233,7 @@ modules:
           type: "persistentVolumeClaim"
           storageClass: "{{ .Context.platform.storageClass.workspace }}"
           size: "{{ .Parameters.masterLogStorage }}Gi"
-      
+
       volume:
         enabled: true
         replicas: {{ .Parameters.volumeReplicas }}
@@ -251,13 +273,13 @@ modules:
             - secretName: seaweedfs-filer-tls
               hosts:
                 - {{ $seaweedfsFilerHost }}
-      
+
       s3:
         enabled: true
         enableAuth: true
         existingConfigSecret: {{ $s3ConfigSecret }}
         createBuckets:
-          {{- range $b := ($storage.buckets | default list) }}
+          {{- range $b := (.Parameters.buckets | default list) }}
           - name: {{ $b.name | quote }}
             anonymousRead: {{ $b.anonymousRead | default false }}
           {{- end }}
@@ -266,7 +288,7 @@ modules:
           - name: auth-config
             configMap:
               name: {{ .Release.metadata.name }}-auth-config
-  
+
         extraVolumeMounts: |
           - name: auth-config
             mountPath: /etc/seaweed/iam
@@ -275,7 +297,7 @@ modules:
         extraArgs:
           - "-iam.config=/etc/seaweed/iam/iam.json"
         {{- end }}
-      
+
         ingress:
           enabled: true
           className: nginx
@@ -290,8 +312,8 @@ modules:
               hosts:
               - {{ $seaweedfsS3Host }}
 
-  # Seeds defaultStorage.buckets[].paths for consumers that require their prefix to
-  # exist beforehand (Spark's FsHistoryProvider refuses to start otherwise).
+  # Seeds buckets[].paths for consumers that require their prefix to exist
+  # beforehand (Spark's FsHistoryProvider refuses to start otherwise).
   - name: provisioning
     dependsOn:
       - main
@@ -303,7 +325,6 @@ modules:
     values: |
       {{- $namespace := printf "%v" .Release.spec.targetNamespace -}}
       {{- $release := printf "%v" .Release.metadata.name -}}
-      {{- $storage := .Context.defaultStorage -}}
 
       fullnameOverride: {{ $release }}-provisioning
 
@@ -314,12 +335,24 @@ modules:
         secretKey: {{ .Parameters.rootSecretKey | quote }}
 
       buckets:
-        {{- range $b := ($storage.buckets | default list) }}
+        {{- range $b := (.Parameters.buckets | default list) }}
         {{- if $b.paths }}
         - name: {{ $b.name | quote }}
           paths: {{ $b.paths | toJson }}
         {{- end }}
         {{- end }}
+
+# Connection 'kcd-<release>-s3' (interface s3). apiUrl is the external ingress
+# URL, internalUrl the in-cluster service URL. No secretRef: the store admin
+# identity is now the root one, whose credentials are plain parameters and not
+# a Secret. Consumers bring their own identity as a package parameter anyway.
+outputs: |
+  - name: s3
+    interface: s3
+    values:
+      apiUrl: "https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}-api.{{ .Context.platform.ingress.suffix }}"
+      internalUrl: "http://{{ .Release.metadata.name }}-s3.{{ .Release.spec.targetNamespace }}.svc.cluster.local:8333"
+      region: us-east-1
 
 roles:
   - storage
