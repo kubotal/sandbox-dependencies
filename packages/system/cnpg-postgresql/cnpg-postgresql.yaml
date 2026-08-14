@@ -71,7 +71,7 @@ modules:
 outputs: |
   {{- range .Parameters.databases }}
   - name: "{{ .name }}"
-    interface: database-server
+    connectionType: database-server
     labels:
       backup: enabled
     values:
