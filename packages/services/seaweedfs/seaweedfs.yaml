@@ -342,7 +342,7 @@ modules:
         {{- end }}
         {{- end }}
 
-# Connection 'kcd-<release>-s3' (interface s3). apiUrl is the external ingress
+# Connection 'kcd-<release>-s3' (connection type s3). apiUrl is the external ingress
 # URL, internalUrl the in-cluster service URL. No secretRef: the store admin
 # identity is now the root one, whose credentials are plain parameters and not
 # a Secret. Consumers bring their own identity as a package parameter anyway.
