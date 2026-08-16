@@ -14,18 +14,13 @@
 #  limitations under the License.
 #
 
-# Ported from okdp-control-plane-dev-sandbox. Kubauth is the identity provider
-# the Control Plane's user and group screens talk to: without it, the ten
-# /api/v1/identity routes answer 501 and the console hides the whole area.
+# Identity provider behind the /api/v1/identity routes. Not applied by default,
+# its Release lives under clusters/sandbox/optional/.
 #
-# The sandbox runs on Keycloak, so this package is NOT applied by default. Its
-# Release lives under clusters/sandbox/optional/, see the README.
-#
-# Three Context keys of the original had no equivalent here and became
-# parameters: ingress.className was dropped from the platform Context (nginx is
-# hardcoded, as in every other ingress), networkPolicies never existed, and
-# cluster.hostNetworkCidr only matters on a multi-node kind cluster. The LDAP
-# provider is left out: it read a whole .Context.ldap block nothing publishes.
+# The ingress class is hardcoded to nginx, and networkPolicies and
+# hostNetworkCidr are parameters: the platform Context carries none of the three.
+# The LDAP provider and the merger are left out, they need a .Context.ldap block
+# nothing publishes.
 
 apiVersion: v1alpha1
 name: kubauth
@@ -48,7 +43,7 @@ schema:
         title: "Server | Ingress annotations | | order:3 advanced:true"
         properties: {}
         additionalProperties: true
-      networkPolicies: { type: boolean, default: false, title: "Server | Network policies | | order:4 advanced:true", description: "Was a Context key in the original package, which our platform Context does not carry." }
+      networkPolicies: { type: boolean, default: false, title: "Server | Network policies | | order:4 advanced:true", description: "Restrict traffic to the kubauth pods." }
       hostNetworkCidr: { type: string, default: "", title: "Server | Host network CIDR | | order:5 advanced:true", description: "Only needed on a multi-node kind cluster." }
       allowPasswordGrant: { type: boolean, default: false, title: "Authentication | Allow password grant | | order:1 advanced:true" }
       enforcePKCE: { type: boolean, default: false, title: "Authentication | Enforce PKCE | | order:2 advanced:true" }
