@@ -51,7 +51,7 @@ schema:
         default: 0.5
         multipleOf: 0.25
         description: "CPU request in vCPU. Limits are calculated as 2x the request."
-      db: { type: connectionRef, connectionType: database-server, required: true }
+      db: { type: connectionRef, contract: database-server, required: true }
       realm:
         properties:
           name: { type: string, required: true }
