@@ -20,7 +20,7 @@
 # owner passwordSecret published as secretRef.
 apiVersion: v1alpha1
 name: cnpg-postgresql
-tag: 18.3-p01-cnx01
+tag: 18.3-p02
 protected: false
 description: |
   Defines multiple logical PostgreSQL databases managed by the CloudNativePG operator within a single PostgreSQL
@@ -72,8 +72,6 @@ outputs: |
   {{- range .Parameters.databases }}
   - name: "{{ .name }}"
     contract: database-server
-    labels:
-      backup: enabled
     values:
       engine: postgresql
       driver: org.postgresql.Driver
