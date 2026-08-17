@@ -16,7 +16,7 @@
 
 apiVersion: v1alpha1
 name: kubocd-webhooks
-tag: v0.3.2-contract-p02
+tag: v0.3.2-contract-p03
 protected: true
 description: |
   Second stage of kubocd deployment.
@@ -32,7 +32,7 @@ modules:
         tag: v0.3.2-contract
     values: |
       image:
-        repository: localhost:5008/kubocd
+        repository: quay.io/kubotal/kubocd
         pullPolicy: Always
       webhook:
         replicaCount: {{ .Parameters.replicaCount }}
