@@ -22,7 +22,7 @@
 
 apiVersion: v1alpha1
 name: seaweedfs
-tag: 4.17.0-p4-cnx02
+tag: 4.17.0-p5
 protected: false
 description: |
   SeaweedFS is a simple and highly scalable distributed file system. There are the objectives to store billions of files and to serve the files fast!
@@ -346,8 +346,9 @@ modules:
         {{- end }}
         {{- end }}
 
-# Connection 'kcd-<release>-s3' (connection type s3). apiUrl is the external ingress
-# URL, internalUrl the in-cluster service URL. No secretRef: the store admin
+# Connection 'kcd-<release>-s3' (contract s3). apiUrl is the external ingress
+# URL, internalUrl the in-cluster service URL, consoleUrl the web console. No
+# secretRef: the store admin
 # identity is now the root one, whose credentials are plain parameters and not
 # a Secret. Consumers bring their own identity as a package parameter anyway.
 outputs: |
@@ -356,6 +357,7 @@ outputs: |
     values:
       apiUrl: "https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}-api.{{ .Context.platform.ingress.suffix }}"
       internalUrl: "http://{{ .Release.metadata.name }}-s3.{{ .Release.spec.targetNamespace }}.svc.cluster.local:8333"
+      consoleUrl: "https://{{ .Release.metadata.name }}-{{ .Release.spec.targetNamespace }}.{{ .Context.platform.ingress.suffix }}"
       region: us-east-1
 
 roles:
