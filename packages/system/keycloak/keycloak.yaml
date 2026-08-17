@@ -21,7 +21,7 @@
 
 apiVersion: v1alpha1
 name: keycloak
-tag: 24.4.11-p10-cnx01
+tag: 24.4.11-p11
 protected: false
 description: |
   Keycloak identity and access management for Kubernetes
@@ -61,7 +61,8 @@ schema:
       # register clients through the DCR API must be covered by trustedHosts, and
       # any non-default scope such requests ask for must be in allowedScopes.
       # Defaults are applied in the template, the schema forbids them on arrays:
-      # trustedHosts ["*.svc.cluster.local"], allowedScopes ["groups"].
+      # trustedHosts ["*.<ingress suffix>", "*.svc.cluster.local"], allowedScopes
+      # ["groups"].
       anonymousDCR:
         properties:
           trustedHosts:
@@ -144,7 +145,7 @@ modules:
     values: |
 
       {{- $dcr := (.Parameters.anonymousDCR | default dict) -}}
-      {{- $dcrTrustedHosts := ($dcr.trustedHosts | default (list "*.svc.cluster.local")) -}}
+      {{- $dcrTrustedHosts := ($dcr.trustedHosts | default (list (printf "*.%s" $.Context.platform.ingress.suffix) "*.svc.cluster.local")) -}}
       {{- $dcrAllowedScopes := ($dcr.allowedScopes | default (list "groups")) -}}
 
       global:
