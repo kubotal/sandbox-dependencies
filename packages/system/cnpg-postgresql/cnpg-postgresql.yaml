@@ -36,7 +36,10 @@ schema:
         items:
           properties:
             name: { type: string, required: true }
+            # Required: the published Connection carries the owner's Secret,
+            # so a database without one has nothing to hand to a consumer.
             owner:
+              required: true
               properties:
                 username: { type: string, required: true }
                 # Owner credentials Secret (keys: username, password), also
