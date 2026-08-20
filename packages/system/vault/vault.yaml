@@ -19,7 +19,7 @@
 
 apiVersion: v1alpha1
 name: vault
-tag: 0.29.1-cnx02
+tag: 0.29.1-p01
 protected: true
 description: |
   HashiCorp Vault, the secret backend a SecretStore points at. Runs in dev mode by default,
