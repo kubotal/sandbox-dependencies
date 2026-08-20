@@ -182,8 +182,8 @@ modules:
           method: basic
           basic:
             create_auth_secret: creds-seaweedfs-filer-basic
-            username: {{ .Parameters.username }}
-            password: {{ .Parameters.password }}
+            username: {{ .Parameters.username | quote }}
+            password: {{ .Parameters.password | quote }}
 
   - name: main
     dependsOn:
