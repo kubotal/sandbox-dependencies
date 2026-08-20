@@ -55,10 +55,25 @@ schema:
           displayName: { type: string, default: "" }
           accessTokenLifespan: { type: integer, default: 3600 }
       # DCR callers must be covered by trustedHosts, their extra scopes by
-      # allowedScopes. Defaults live in the template, the schema forbids them
-      # on arrays: ["*.<ingress suffix>", "*.svc.cluster.local"] / ["groups"].
+      # allowedScopes. The defaults live in the template because KuboCD panics
+      # on a schema default for an array: ["*.<ingress suffix>",
+      # "*.svc.cluster.local"] / ["groups"].
+      #
+      # Off by default: anonymous registration is only needed when the platform
+      # provisions its clients through dcr, and it lets anyone reaching a
+      # trusted host register a client without authenticating.
+      #
+      # Off does not mean "drop the policy": keycloak-config-cli removes from
+      # the realm what the JSON stops declaring, and a realm with no
+      # trusted-hosts policy accepts anonymous registrations from anywhere. It
+      # means the policy trusts no host at all.
+      #
+      # It also answers what the arrays cannot: an unset array and one
+      # explicitly emptied both reach the template as an empty list, so
+      # emptying trustedHosts could never mean "trust nobody".
       anonymousDCR:
         properties:
+          enabled: { type: boolean, default: false, title: "DCR | Anonymous registration | | order:1", description: "Let a client register itself without authenticating, limited to trustedHosts. Off, the policy stays registered with no trusted host, which turns every anonymous registration down. Needed only when oidc.clientProvisioning is dcr." }
           trustedHosts:
             type: array
             items: { type: string }
@@ -139,6 +154,7 @@ modules:
     values: |
 
       {{- $dcr := (.Parameters.anonymousDCR | default dict) -}}
+      {{- $dcrEnabled := $dcr.enabled -}}
       {{- $dcrTrustedHosts := ($dcr.trustedHosts | default (list (printf "*.%s" $.Context.ingress.suffix) "*.svc.cluster.local")) -}}
       {{- $dcrAllowedScopes := ($dcr.allowedScopes | default (list "groups")) -}}
 
@@ -349,7 +365,11 @@ modules:
                     "config": {
                       "host-sending-registration-request-must-match": ["true"],
                       "client-uris-must-match": ["true"],
+                      {{- if $dcrEnabled }}
                       "trusted-hosts": ["{{ $dcrTrustedHosts | join "\", \"" | replace "{{ .Context.ingress.suffix }}" $.Context.ingress.suffix }}"]
+                      {{- else }}
+                      "trusted-hosts": []
+                      {{- end }}
                     }
                   },
                   {
