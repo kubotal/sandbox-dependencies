@@ -49,7 +49,6 @@ schema:
       enforcePKCE: { type: boolean, default: false, title: "Authentication | Enforce PKCE | | order:2 advanced:true" }
       ssoSticky: { type: boolean, default: false, title: "Authentication | Sticky SSO | | order:3 advanced:true" }
       clientsNamespace: { type: string, default: "kubauth-oidc", title: "Clients | Namespace | | order:1 columns:2" }
-      clientsCreateNamespace: { type: boolean, default: true, title: "Clients | Create namespace | | order:2" }
       usersNamespace: { type: string, default: "kubauth-users", title: "Users | Namespace | | order:1 columns:2" }
       usersCreateNamespace: { type: boolean, default: true, title: "Users | Create namespace | | order:2" }
       auditEnabled: { type: boolean, default: true, title: "Users | Audit trail | | order:3" }
@@ -78,6 +77,7 @@ modules:
     values: |
       {{- $kubauthHost := printf "%s.%s" .Parameters.oidcIngressHost .Context.ingress.suffix -}}
       networkPolicies:
+        enabled: {{ .Parameters.networkPolicies }}
         forWebhooks: true
         {{- with .Parameters.hostNetworkCidr }}
         ipBlock: {{ . }}
@@ -99,19 +99,14 @@ modules:
           passthrough: false
           annotations:
             {{- toYaml (.Parameters.oidcIngressAnnotations | default dict) | nindent 8 }}
-        postLogoutURL: https://{{ $kubauthHost }}/index
-        issuer: https://{{ $kubauthHost }}
-        networkPolicies:
-          enabled: {{ .Parameters.networkPolicies }}
+        postLogoutURL: {{ if .Parameters.oidcServerTls }}https{{ else }}http{{ end }}://{{ $kubauthHost }}/index
+        issuer: {{ if .Parameters.oidcServerTls }}https{{ else }}http{{ end }}://{{ $kubauthHost }}
         sso:
           cleanupPeriod: 5m
           sticky: {{ .Parameters.ssoSticky }}
         allowPasswordGrant: {{ .Parameters.allowPasswordGrant }}
         enforcePKCE: {{ .Parameters.enforcePKCE }}
-        clients:
-          createNamespace: {{ .Parameters.clientsCreateNamespace }}
-          namespace: {{ .Parameters.clientsNamespace }}
-        multiTenant: false
+        clientPrivilegedNamespace: {{ .Parameters.clientsNamespace }}
         idProvider:
           {{- if .Parameters.auditEnabled }}
           baseURL: http://localhost:6805
